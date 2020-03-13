@@ -48,6 +48,13 @@ func buildOptions(device machine.Device, hostname string) (name string, opts []n
 		opts = append(opts, nic.WithAddressing(d))
 	}
 
+	//Configure Vlan interfaces
+	for _, vlan := range device.Vlans {
+		opts = append(opts, nic.WithVlan(vlan.Id))
+
+		opts = append(opts, nic.WithVlanCIDR(vlan.Id, vlan.CIDR))
+	}
+
 	// Configure Bonding
 	if device.Bond == nil {
 		return device.Interface, opts, err

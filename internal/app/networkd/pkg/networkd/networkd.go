@@ -379,6 +379,10 @@ func (n *Networkd) configureLinks(bonded bool) error {
 					return fmt.Errorf("error creating nic %q: %w", netif.Name, err)
 				}
 
+				if err := netif.CreateSub(); err != nil {
+					return fmt.Errorf("error creating sub interface nic %q: %w", netif.Name, err)
+				}
+
 				if err := netif.Configure(); err != nil {
 					return fmt.Errorf("error configuring nic %q: %w", netif.Name, err)
 				}

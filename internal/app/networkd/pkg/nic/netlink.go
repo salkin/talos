@@ -13,18 +13,13 @@ import (
 )
 
 // createLink creates an interface
-func (n *NetworkInterface) createLink() error {
-	var info *rtnetlink.LinkInfo
-
-	if n.Bonded {
-		info = &rtnetlink.LinkInfo{Kind: "bond"}
-	}
+func (n *NetworkInterface) createLink(name string, info *rtnetlink.LinkInfo) error {
 
 	err := n.rtConn.Link.New(&rtnetlink.LinkMessage{
 		Family: unix.AF_UNSPEC,
 		Type:   0,
 		Attributes: &rtnetlink.LinkAttributes{
-			Name: n.Name,
+			Name: name,
 			Info: info,
 		},
 	})
@@ -74,6 +69,37 @@ func (n *NetworkInterface) configureBond(idx int, attrs *netlink.AttributeEncode
 			Info: &rtnetlink.LinkInfo{
 				// https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/if_link.h#L612
 				Kind: "bond",
+				Data: nlAttrBytes,
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *NetworkInterface) configureVlan(idx int, attrs *netlink.AttributeEncoder) error {
+	// Request the details of the interface
+	msg, err := n.rtConn.Link.Get(uint32(idx))
+	if err != nil {
+		return err
+	}
+
+	nlAttrBytes, err := attrs.Encode()
+	if err != nil {
+		return err
+	}
+	err = n.rtConn.Link.Set(&rtnetlink.LinkMessage{
+		Family: unix.AF_UNSPEC,
+		Type:   msg.Type,
+		Index:  msg.Index,
+		Change: 0,
+		Attributes: &rtnetlink.LinkAttributes{
+			Info: &rtnetlink.LinkInfo{
+				// https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/if_link.h#L612
+				Kind: "vlan",
 				Data: nlAttrBytes,
 			},
 		},
