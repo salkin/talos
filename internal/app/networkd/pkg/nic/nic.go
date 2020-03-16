@@ -141,20 +141,19 @@ func (n *NetworkInterface) CreateSub() error {
 	log.Println("Configuring vlan sub devices ")
 	//Create all the VLAN devices
 	for _, vlan := range n.Vlans {
-		name := vlan.Parent + "." + strconv.Itoa(int(vlan.Id))
+		name := n.Name + "." + strconv.Itoa(int(vlan.Id))
 		iface, err := net.InterfaceByName(name)
 		if err == nil {
 			vlan.Link = iface
 			continue
 		}
 
-		//vlan.VlanSettings.Uint16(uint16(unix.IFLA_LINK), uint16(n.Link.Index))
-
 		data, _ := vlan.VlanSettings.Encode()
 		//data, _ := enc.Encode()
+		masterIdx := uint32(n.Link.Index)
 		log.Println("Configuring vlan device" + strconv.Itoa(int(vlan.Id)))
 		info = &rtnetlink.LinkInfo{Kind: "vlan", Data: data}
-		if err = n.createLink(name, info); err != nil {
+		if err = n.createSubLink(name, info, &masterIdx); err != nil {
 			log.Println("failed to create vlan link " + err.Error())
 			return err
 		}
@@ -198,20 +197,18 @@ func (n *NetworkInterface) Configure() (err error) {
 		return fmt.Errorf("failed to bring up interface %q: %w", n.Link.Name, err)
 	}
 
-	log.Println("Configuring vlan links ")
+	log.Println("Configuring vlan links to UP state")
 	//Create all the VLAN devices
 	for _, vlan := range n.Vlans {
-
-		if err = n.configureVlan(vlan.Link.Index, vlan.VlanSettings); err != nil {
-			return err
-		}
 
 		if err = n.rtnlConn.LinkUp(vlan.Link); err != nil {
 			return err
 		}
+		n.waitForLinkToBeUp(vlan.Link)
 		if err != nil {
 			return fmt.Errorf("failed to bring up interface %q: %w", vlan.Link.Name, err)
 		}
+
 	}
 	return err
 }
@@ -250,9 +247,29 @@ func (n *NetworkInterface) Addressing() error {
 	}
 
 	for _, method := range n.AddressMethod {
-		if err := n.configureInterface(method); err != nil {
+		if err := n.configureInterface(method, n.Link); err != nil {
 			// Treat as non fatal error when failing to configure an interface
 			continue
+		}
+	}
+
+	return nil
+}
+
+// AddressingSub handles the address method for a configured sub interface ( dhcp/static ).
+// This is inclusive of the address itself as well as any defined routes.
+func (n *NetworkInterface) AddressingSub() error {
+	if n.IsIgnored() {
+		return nil
+	}
+
+	for _, vlan := range n.Vlans {
+		for _, method := range vlan.AddressMethod {
+			if err := n.configureInterface(method, vlan.Link); err != nil {
+				// Treat as non fatal error when failing to configure an interface
+				continue
+
+			}
 		}
 	}
 
@@ -282,7 +299,7 @@ func (n *NetworkInterface) renew(method address.Addressing) {
 	for {
 		<-time.After(renewDuration)
 
-		if err = n.configureInterface(method); err != nil {
+		if err = n.configureInterface(method, n.Link); err != nil {
 			renewDuration = (renewDuration / 2)
 		} else {
 			renewDuration = method.TTL() / 2
@@ -293,10 +310,10 @@ func (n *NetworkInterface) renew(method address.Addressing) {
 // configureInterface handles the actual address discovery mechanism and
 // netlink interaction to configure the interface.
 // nolint: gocyclo
-func (n *NetworkInterface) configureInterface(method address.Addressing) error {
+func (n *NetworkInterface) configureInterface(method address.Addressing, link *net.Interface) error {
 	var err error
 
-	if err = method.Discover(context.Background(), n.Link); err != nil {
+	if err = method.Discover(context.Background(), link); err != nil {
 		return err
 	}
 

@@ -9,6 +9,7 @@ import (
 	"net"
 
 	"github.com/mdlayher/netlink"
+	"github.com/talos-systems/talos/internal/app/networkd/pkg/address"
 )
 
 const (
@@ -29,18 +30,19 @@ const (
 )
 
 type Vlan struct {
-	Parent       string
-	Id           uint16
-	CIDRs        []string
-	Link         *net.Interface
-	VlanSettings *netlink.AttributeEncoder
+	Parent        string
+	Id            uint16
+	Link          *net.Interface
+	VlanSettings  *netlink.AttributeEncoder
+	AddressMethod []address.Addressing
 }
 
 // WithParent sets the parent index device
 func (v *Vlan) WithParent(index uint32) {
+	//v.Uint32(uint16(unix.IFLA_LINK), index)
 }
 
-// WithCIDR defines if the interface have static CIDRs added
+// WithVlan defines the VLAN id to use
 func WithVlan(id uint16) Option {
 	return func(n *NetworkInterface) (err error) {
 
@@ -54,10 +56,22 @@ func WithVlan(id uint16) Option {
 			VlanSettings: netlink.NewAttributeEncoder(),
 		}
 		vlan.VlanSettings.Uint16(uint16(IFLA_VLAN_ID), uint16(vlan.Id))
-		vlan.VlanSettings.Uint16(uint16(IFLA_VLAN_PROTOCOL), VLAN_PROTOCOL_8021Q)
 		n.Vlans = append(n.Vlans, vlan)
 		return nil
 	}
+}
+
+func WithVlanDhcp(id uint16) Option {
+	return func(n *NetworkInterface) (err error) {
+		for _, vlan := range n.Vlans {
+			if vlan.Id == id {
+				vlan.AddressMethod = append(vlan.AddressMethod, &address.DHCP{})
+				return nil
+			}
+		}
+		return fmt.Errorf("VLAN id not found for DHCP. Vlan ID  %v given", id)
+	}
+
 }
 
 // WithVlanCIDR defines if the interface have static CIDRs added
@@ -66,7 +80,7 @@ func WithVlanCIDR(id uint16, cidr string) Option {
 
 		for _, vlan := range n.Vlans {
 			if vlan.Id == id {
-				vlan.CIDRs = append(vlan.CIDRs, cidr)
+				vlan.AddressMethod = append(vlan.AddressMethod, &address.Static{CIDR: cidr})
 				return nil
 			}
 		}

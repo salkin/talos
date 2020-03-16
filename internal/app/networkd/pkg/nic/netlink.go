@@ -27,6 +27,22 @@ func (n *NetworkInterface) createLink(name string, info *rtnetlink.LinkInfo) err
 	return err
 }
 
+// createLink creates an interface
+func (n *NetworkInterface) createSubLink(name string, info *rtnetlink.LinkInfo, master *uint32) error {
+
+	err := n.rtConn.Link.New(&rtnetlink.LinkMessage{
+		Family: unix.AF_UNSPEC,
+		Type:   0,
+		Attributes: &rtnetlink.LinkAttributes{
+			Name: name,
+			Info: info,
+			Type: *master,
+		},
+	})
+
+	return err
+}
+
 // setMTU sets the link MTU
 func (n *NetworkInterface) setMTU(idx int, mtu uint32) error {
 	msg, err := n.rtConn.Link.Get(uint32(idx))

@@ -31,7 +31,7 @@ func buildOptions(device machine.Device, hostname string) (name string, opts []n
 	// Configure Addressing
 	switch {
 	case device.CIDR != "":
-		s := &address.Static{Device: &device}
+		s := &address.Static{CIDR: device.CIDR, RouteList: device.Routes, Mtu: device.MTU}
 
 		// Set a default for the hostname to ensure we always have a valid
 		// ip + hostname pair
@@ -51,8 +51,12 @@ func buildOptions(device machine.Device, hostname string) (name string, opts []n
 	//Configure Vlan interfaces
 	for _, vlan := range device.Vlans {
 		opts = append(opts, nic.WithVlan(vlan.Id))
-
-		opts = append(opts, nic.WithVlanCIDR(vlan.Id, vlan.CIDR))
+		if vlan.CIDR != "" {
+			opts = append(opts, nic.WithVlanCIDR(vlan.Id, vlan.CIDR))
+		}
+		if vlan.DHCP {
+			opts = append(opts, nic.WithVlanDhcp(vlan.Id))
+		}
 	}
 
 	// Configure Bonding
@@ -270,7 +274,7 @@ func buildKernelOptions(cmdline string) (name string, opts []nic.Option) {
 		opts = append(opts, nic.WithName(link.Name))
 	}
 
-	s := &address.Static{Device: device, NameServers: resolvers, FQDN: hostname, NetIf: link}
+	s := &address.Static{Mtu: device.MTU, NameServers: resolvers, FQDN: hostname, NetIf: link}
 	opts = append(opts, nic.WithAddressing(s))
 
 	return link.Name, opts
