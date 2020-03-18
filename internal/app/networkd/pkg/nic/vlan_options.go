@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdlayher/netlink"
 	"github.com/talos-systems/talos/internal/app/networkd/pkg/address"
+	"github.com/talos-systems/talos/pkg/config/machine"
 )
 
 const (
@@ -75,12 +76,12 @@ func WithVlanDhcp(id uint16) Option {
 }
 
 // WithVlanCIDR defines if the interface have static CIDRs added
-func WithVlanCIDR(id uint16, cidr string) Option {
+func WithVlanCIDR(id uint16, cidr string, routeList []machine.Route) Option {
 	return func(n *NetworkInterface) (err error) {
 
 		for _, vlan := range n.Vlans {
 			if vlan.Id == id {
-				vlan.AddressMethod = append(vlan.AddressMethod, &address.Static{CIDR: cidr})
+				vlan.AddressMethod = append(vlan.AddressMethod, &address.Static{CIDR: cidr, RouteList: routeList})
 				return nil
 			}
 		}

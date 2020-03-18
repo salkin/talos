@@ -137,9 +137,10 @@ type Bond struct {
 
 // Vlan represents vlan settings for a device
 type Vlan struct {
-	Id   uint16 `yaml:"vlanId"`
-	CIDR string `ỳaml:"cidrs"`
-	DHCP bool   `yaml:"dhcp"`
+	Id     uint16  `yaml:"vlanId"`
+	CIDR   string  `ỳaml:"cidr"`
+	DHCP   bool    `yaml:"dhcp"`
+	Routes []Route `yaml:"routes"`
 }
 
 // Route represents a network route.

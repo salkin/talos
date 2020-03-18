@@ -74,8 +74,9 @@ func New(setters ...Option) (*NetworkInterface, error) {
 		result = multierror.Append(result, errors.New("interface must have a name"))
 	}
 
-	// If no addressing methods have been configured, default to DHCP
-	if len(iface.AddressMethod) == 0 {
+	// If no addressing methods have been configured, default to DHCP.
+	//If VLANs exist do not force DHCP on master device
+	if len(iface.AddressMethod) == 0 && len(iface.Vlans) == 0 {
 		iface.AddressMethod = append(iface.AddressMethod, &address.DHCP{})
 	}
 
@@ -138,10 +139,10 @@ func (n *NetworkInterface) Create() error {
 func (n *NetworkInterface) CreateSub() error {
 	var info *rtnetlink.LinkInfo
 
-	log.Println("Configuring vlan sub devices ")
 	//Create all the VLAN devices
 	for _, vlan := range n.Vlans {
 		name := n.Name + "." + strconv.Itoa(int(vlan.Id))
+		log.Printf("setting up %s", name)
 		iface, err := net.InterfaceByName(name)
 		if err == nil {
 			vlan.Link = iface
@@ -149,9 +150,8 @@ func (n *NetworkInterface) CreateSub() error {
 		}
 
 		data, _ := vlan.VlanSettings.Encode()
-		//data, _ := enc.Encode()
+		//Vlan devices needs the master link index
 		masterIdx := uint32(n.Link.Index)
-		log.Println("Configuring vlan device" + strconv.Itoa(int(vlan.Id)))
 		info = &rtnetlink.LinkInfo{Kind: "vlan", Data: data}
 		if err = n.createSubLink(name, info, &masterIdx); err != nil {
 			log.Println("failed to create vlan link " + err.Error())
@@ -197,10 +197,8 @@ func (n *NetworkInterface) Configure() (err error) {
 		return fmt.Errorf("failed to bring up interface %q: %w", n.Link.Name, err)
 	}
 
-	log.Println("Configuring vlan links to UP state")
 	//Create all the VLAN devices
 	for _, vlan := range n.Vlans {
-
 		if err = n.rtnlConn.LinkUp(vlan.Link); err != nil {
 			return err
 		}
@@ -391,4 +389,5 @@ func (n *NetworkInterface) Reset() {
 
 	// nolint: errcheck
 	n.rtnlConn.LinkDown(link)
+
 }

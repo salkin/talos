@@ -6,6 +6,7 @@ package networkd
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strings"
 
@@ -43,6 +44,15 @@ func buildOptions(device machine.Device, hostname string) (name string, opts []n
 		}
 
 		opts = append(opts, nic.WithAddressing(s))
+	case device.DHCP == false:
+		//Allow master interface without any addressing if VLANs exist
+		if device.CIDR == "" && len(device.Vlans) > 0 {
+			log.Printf("No addressing for master device %s", device.Interface)
+			opts = append(opts, nic.WithNoAddressing())
+		} else {
+			d := &address.DHCP{}
+			opts = append(opts, nic.WithAddressing(d))
+		}
 	default:
 		d := &address.DHCP{}
 		opts = append(opts, nic.WithAddressing(d))
@@ -52,7 +62,7 @@ func buildOptions(device machine.Device, hostname string) (name string, opts []n
 	for _, vlan := range device.Vlans {
 		opts = append(opts, nic.WithVlan(vlan.Id))
 		if vlan.CIDR != "" {
-			opts = append(opts, nic.WithVlanCIDR(vlan.Id, vlan.CIDR))
+			opts = append(opts, nic.WithVlanCIDR(vlan.Id, vlan.CIDR, vlan.Routes))
 		}
 		if vlan.DHCP {
 			opts = append(opts, nic.WithVlanDhcp(vlan.Id))
